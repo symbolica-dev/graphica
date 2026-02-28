@@ -110,7 +110,7 @@ impl<EdgeData> Edge<EdgeData> {
 }
 
 /// Empty data type.
-#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Empty;
 
 impl Display for Empty {
@@ -121,7 +121,7 @@ impl Display for Empty {
 
 /// Data that has a public part and a private part. The private
 /// part is not used for equality or hashing.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct HiddenData<T, U> {
     pub data: T,
     pub hidden: U,
