@@ -466,6 +466,48 @@ impl<N, E> Graph<N, E> {
         Ok(index)
     }
 
+    /// Change `source` and/or `target` node of an edge while preserving the edge itself.
+    ///
+    /// Note that the order of the vertices at the affected nodes might not be preserved.
+    pub fn reconnect_edge(&mut self, edge: usize, source: usize, target: usize) -> Result<usize, &'static str> {
+        if source >= self.nodes.len() || target >= self.nodes.len() {
+            return Err("Invalid node index");
+        }
+        let e = &mut self.edges[edge];
+        let (source, target) = if !e.directed && source > target {
+            (target, source)
+        } else {
+            (source, target)
+        };
+
+        if e.vertices.0 == source && e.vertices.1 == target {
+            return Ok(edge);
+        }
+
+        //disconnect old
+        self.nodes[e.vertices.0].valence -= 1;
+        self.nodes[e.vertices.1].valence -= 1;
+        let index = self.nodes[e.vertices.0].edges.iter().position(|x| *x == edge).unwrap();
+        self.nodes[e.vertices.0].edges.swap_remove(index);
+        if e.vertices.0 != e.vertices.1 {
+            let index = self.nodes[e.vertices.1].edges.iter().position(|x| *x == edge).unwrap();
+            self.nodes[e.vertices.1].edges.swap_remove(index);
+        }
+
+        //reconnect
+        e.vertices.0 = source;
+        e.vertices.1 = target;
+        self.nodes[source].edges.push(edge);
+        self.nodes[source].valence += 1;
+        self.nodes[target].valence += 1;
+
+        if source != target {
+            self.nodes[target].edges.push(edge)
+        }
+
+        Ok(edge)
+    }
+
     /// Set the data of the node at index `index`, returning the old data.
     pub fn set_node_data(&mut self, index: usize, data: N) -> N {
         std::mem::replace(&mut self.nodes[index].data, data)
@@ -2160,6 +2202,41 @@ mod test {
         .unwrap();
 
         assert_eq!(gs.len(), 210);
+    }
+
+    #[test]
+    fn reconnect_edge() {
+        let mut g = Graph::new();
+        let a = g.add_node(0);
+        let b = g.add_node(0);
+        let c = g.add_node(0);
+        let d = g.add_node(0);
+
+        // edge 0: a -- b, edge 1: b -- c
+        g.add_edge(a, b, false, 0).unwrap();
+        g.add_edge(b, c, false, 1).unwrap();
+
+        assert_eq!(g.node(a).valence, 1);
+        assert_eq!(g.node(b).valence, 2);
+        assert_eq!(g.node(c).valence, 1);
+
+        // Reconnect edge 0 from a--b to b--d
+        g.reconnect_edge(0, b, d).unwrap();
+
+        // Edge now connects b and d (undirected canonical: min vertex first)
+        assert_eq!(g.edge(0).vertices, (b, d));
+        assert!(!g.node(a).edges.contains(&0));
+        assert!(g.node(b).edges.contains(&0));
+        assert!(g.node(d).edges.contains(&0));
+
+        // Valence: a loses 1, b stays same (lost one, gained one), d gains 1
+        assert_eq!(g.node(a).valence, 0);
+        assert_eq!(g.node(b).valence, 2);
+        assert_eq!(g.node(d).valence, 1);
+
+        // Edge 1 is untouched
+        assert_eq!(g.edge(1).vertices, (b, c));
+        assert!(g.node(c).edges.contains(&1));
     }
 
     #[test]
